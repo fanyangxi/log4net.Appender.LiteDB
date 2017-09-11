@@ -16,7 +16,7 @@ namespace log4net.Appender.LiteDB
     /// An example configuration to log to the above table:
     /// <code lang="XML" escaped="true">
     /// <appender name="LiteDbAppender" type="log4net.Appender.LiteDB.LiteAppender, log4net.Appender.LiteDB">
-    ///   <connectionString value="Logs\sample-logs.db"/>
+    ///   <file value="Logs\sample-logs.db"/>
     ///   <collectionName value="logs"/>
     ///   <parameter>
     ///     <name value="timestamp"/>
