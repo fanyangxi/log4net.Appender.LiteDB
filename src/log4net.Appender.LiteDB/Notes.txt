@@ -1,0 +1,17 @@
+﻿
+
+https://github.com/simonproctor/Log4Net-Mongo/
+https://github.com/simonproctor/Log4Net-Mongo/blob/master/src/MongoAppender/MongoDbAppender.cs
+
+### 
+
+About Collection Name:
+- The ccollection name is: logs
+
+
+
+
+
+
+
++
