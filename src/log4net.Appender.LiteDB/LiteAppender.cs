@@ -198,6 +198,7 @@ namespace log4net.Appender.LiteDB
         private BsonDocument BuildBsonDocument(LoggingEvent log)
         {
             var doc = new BsonDocument();
+            doc.Add("_id", new BsonValue(Guid.NewGuid()));
             foreach (var parameter in parameters)
             {
                 try
