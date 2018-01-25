@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
 using log4net.Core;
 using log4net.Util;
 using LiteDB;
