@@ -180,7 +180,7 @@ namespace log4net.Appender.LiteDB
         protected virtual LiteCollection<BsonDocument> GetCollection()
         {
 
-            if (this.FileMaxSize > 1024 * 1024 * 10 && liteFileInfo.Exists && liteFileInfo.Length > this.FileMaxSize * 1024 * 1024)
+            if (this.FileMaxSize   >  10 && liteFileInfo.Exists && liteFileInfo.Length > this.FileMaxSize * 1024 * 1024)
             {
                 DiposeConnection();
                 try
