@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using log4net.Core;
 using log4net.Util;
 using LiteDB;
+using System.IO;
 
 namespace log4net.Appender.LiteDB
 {
@@ -83,7 +84,11 @@ namespace log4net.Appender.LiteDB
         /// </para>
         /// </remarks>
         public virtual string File { get; set; }
-
+        /// <summary>
+        /// Set max file size , When  more than FileMaxSize ,will move to new name.
+        /// </summary>
+        /// <value>Must more than 10MB</value>
+        public virtual long FileMaxSize { get; set; }
         /// <summary>
         /// Gets or sets the name of the collection in the database. Defaults to "logs"
         /// </summary>
@@ -145,6 +150,7 @@ namespace log4net.Appender.LiteDB
         {
             var record = BuildBsonDocument(loggingEvent);
             var collection = GetCollection();
+            
             collection.Insert(record);
         }
 
@@ -173,9 +179,24 @@ namespace log4net.Appender.LiteDB
         /// <returns>The Mongo collection</returns>
         protected virtual LiteCollection<BsonDocument> GetCollection()
         {
-            return databaseConnection.GetCollection(CollectionName ?? "logs");
-        }
 
+            if (this.FileMaxSize > 1024 * 1024 * 10 && liteFileInfo.Exists && liteFileInfo.Length > this.FileMaxSize * 1024 * 1024)
+            {
+                DiposeConnection();
+                try
+                {
+                    var files = System.IO.Directory.GetFiles(liteFileInfo.DirectoryName, Path.GetFileNameWithoutExtension(liteFileInfo.FullName) + "*" + liteFileInfo.Extension);
+                    liteFileInfo.MoveTo($"{liteFileInfo.DirectoryName}{Path.AltDirectorySeparatorChar}{Path.GetFileNameWithoutExtension(liteFileInfo.FullName)}_{files.Length + 1}{liteFileInfo.Extension}");
+                }
+                catch (Exception)
+                {
+                }
+                InitializeDatabaseConnection();
+            }
+            var col = databaseConnection.GetCollection(CollectionName ?? "logs");
+            return col;
+        }
+       System.IO.FileInfo liteFileInfo = null;
         /// <summary>
         /// Gets the Mongo database based on the connection string. IF the database name isn't 
         /// present in the connection string it defaults to 'log4net'.
@@ -184,6 +205,7 @@ namespace log4net.Appender.LiteDB
         protected virtual LiteDatabase CreateDatabaseConnection()
         {
             var fullPath = SystemInfo.ConvertToFullPath(this.File);
+            liteFileInfo = new System.IO.FileInfo(fullPath);
             var db = new LiteDatabase(fullPath);
             return db;
         }
@@ -226,6 +248,14 @@ namespace log4net.Appender.LiteDB
             {
                 DiposeConnection();
                 databaseConnection = CreateDatabaseConnection();
+                var col = databaseConnection.GetCollection(CollectionName ?? "logs");
+                foreach (var parameter in parameters)
+                {
+                    if (parameter.EnsureIndex)
+                    {
+                        col.EnsureIndex(parameter.Name);
+                    }
+                }
             }
             catch (Exception ex)
             {
