@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net35;net40;net45;netstandard2.0;netstandard1.3;</TargetFrameworks>
+    <TargetFrameworks>net35;net40;net45;netstandard2.0</TargetFrameworks>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>2.0.1.1</Version>
+    <Version>2.0.1.5</Version>
     <PackageProjectUrl>https://github.com/maikebing/log4net.Appender.LiteDB</PackageProjectUrl>
     <Description>log4net.Appender.LiteDB.Core is a log4net appender for LiteDB (http://www.litedb.org/)   It forked fanyangxi‘s’ log4net.Appender.LiteDB</Description>
     <PackageId>log4net.Appender.LiteDB.Core</PackageId>

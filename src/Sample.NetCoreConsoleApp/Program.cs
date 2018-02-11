@@ -59,12 +59,16 @@ namespace Sample.ConsoleApp
 
             //Console.WriteLine("Writting log messages...");
             // Write a few messages
+            for (int i = 0; i < 100000; i++)
+            {
+
+
             logger.LogDebug("This is a debug log message");
             logger.LogInformation("This is an info log message");
             logger.LogWarning("This is a warn log message");
             logger.LogError("This is an error log message");
             logger.LogCritical("This is a fatal log message");
-
+            }
             //// Write a message with exception
             //try
             //{
@@ -74,7 +78,7 @@ namespace Sample.ConsoleApp
             //{
             //    logger.Error("Our pretend exception detected!", ex);
             //}
-            using (var db = new LiteDatabase(AppContext.BaseDirectory+ "\\sample-logs.db"))
+            using (var db = new LiteDatabase(new ConnectionString() { Filename = AppContext.BaseDirectory + "\\sample-logs.db", Mode = LiteDB.FileMode.Shared }))
             {
                 // Get a collection (or create, if doesn't exist)
                 var col = db.GetCollection<BsonDocument>("logs");
