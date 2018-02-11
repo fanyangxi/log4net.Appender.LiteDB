@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
 using log4net.Core;
 using log4net.Util;
 using LiteDB;
+using System.IO;
+using System.Linq;
 
 namespace log4net.Appender.LiteDB
 {
@@ -85,7 +85,11 @@ namespace log4net.Appender.LiteDB
         /// </para>
         /// </remarks>
         public virtual string File { get; set; }
-
+        /// <summary>
+        /// Set max file size , When  more than FileMaxSize ,will move to new name.
+        /// </summary>
+        /// <value>Must more than 10MB</value>
+        public virtual long FileMaxSize { get; set; }
         /// <summary>
         /// Gets or sets the name of the collection in the database. Defaults to "logs"
         /// </summary>
@@ -147,6 +151,7 @@ namespace log4net.Appender.LiteDB
         {
             var record = BuildBsonDocument(loggingEvent);
             var collection = GetCollection();
+            
             collection.Insert(record);
         }
 
@@ -167,7 +172,7 @@ namespace log4net.Appender.LiteDB
                 Append(logEvent);
             }
         }
-
+        static object obj = new object();
         /// <summary>
         /// Gets the Mongo collection that the logs will be written to. If one isn't specified 
         /// in the configuration then it defaults to 'logs'.
@@ -175,9 +180,46 @@ namespace log4net.Appender.LiteDB
         /// <returns>The Mongo collection</returns>
         protected virtual LiteCollection<BsonDocument> GetCollection()
         {
-            return databaseConnection.GetCollection(CollectionName ?? "logs");
-        }
+            if (!IsStream)
+            {
+                liteFileInfo.Refresh();
+                if (this.FileMaxSize > 10 && liteFileInfo.Exists && liteFileInfo.Length > this.FileMaxSize * 1024 * 1024)
+                {
+                    lock (obj)
+                    {
 
+
+                        DiposeConnection();
+                        try
+                        {
+                            var files = System.IO.Directory.GetFiles(liteFileInfo.DirectoryName, Path.GetFileNameWithoutExtension(liteFileInfo.FullName) + "*" + liteFileInfo.Extension);
+                            liteFileInfo.MoveTo($"{liteFileInfo.DirectoryName}{Path.AltDirectorySeparatorChar}{Path.GetFileNameWithoutExtension(liteFileInfo.FullName)}_{files.Length + 1}{liteFileInfo.Extension}");
+                        }
+                        catch (Exception)
+                        {
+                        }
+                        InitializeDatabaseConnection();
+                    }
+                }
+            }
+            var col = databaseConnection.GetCollection(CollectionName ?? "logs");
+            if (IsStream)
+            {
+                if (FileMaxSize > 10 && memoryStream.Length > FileMaxSize * 1024 * 1024 && col.LongCount() > 1000)
+                {
+                    long needdelete = (memoryStream.Length - (FileMaxSize * 1024 * 1024)) / (memoryStream.Length / col.LongCount());
+                    if (needdelete > 1000)
+                    {
+                        var doc = col.Find(Query.All("timestamp"), (int)needdelete - 1,1).FirstOrDefault();
+                        int deleted = col.Delete(Query.LTE("timestamp", doc["timestamp"]));
+                        databaseConnection.Shrink(); 
+                    }
+                }
+            }
+            return col;
+        }
+        System.IO.FileInfo liteFileInfo = null;
+         public static    System.IO.MemoryStream memoryStream = new MemoryStream();
         /// <summary>
         /// Gets the Mongo database based on the connection string. IF the database name isn't 
         /// present in the connection string it defaults to 'log4net'.
@@ -185,10 +227,20 @@ namespace log4net.Appender.LiteDB
         /// <returns>The Mongo database</returns>
         protected virtual LiteDatabase CreateDatabaseConnection()
         {
-            var fullPath = SystemInfo.ConvertToFullPath(this.File);
-            var db = new LiteDatabase(fullPath);
-            return db;
+            if (IsStream)
+            {
+                return new LiteDatabase(memoryStream);
+            }
+            else
+            {
+                var fullPath = SystemInfo.ConvertToFullPath(this.File);
+                liteFileInfo = new System.IO.FileInfo(fullPath);
+                var db = new LiteDatabase(fullPath);
+                return db;
+            }
         }
+
+        private bool IsStream => this.File == "|Stream|";
 
         /// <summary>
         /// Builds the BSON document to send to Mongo from the log4net LoggingEvent.
@@ -198,6 +250,7 @@ namespace log4net.Appender.LiteDB
         private BsonDocument BuildBsonDocument(LoggingEvent log)
         {
             var doc = new BsonDocument();
+            doc.Add("_id", new BsonValue(Guid.NewGuid()));
             foreach (var parameter in parameters)
             {
                 try
@@ -227,6 +280,14 @@ namespace log4net.Appender.LiteDB
             {
                 DiposeConnection();
                 databaseConnection = CreateDatabaseConnection();
+                var col = databaseConnection.GetCollection(CollectionName ?? "logs");
+                foreach (var parameter in parameters)
+                {
+                    if (parameter.EnsureIndex)
+                    {
+                        col.EnsureIndex(parameter.Name);
+                    }
+                }
             }
             catch (Exception ex)
             {

@@ -23,5 +23,7 @@ namespace log4net.Appender.LiteDB
         /// Gets or sets the log format value
         /// </summary>
         public string Value { get; set; }
+
+        public bool EnsureIndex { get; set; }
     }
 }
