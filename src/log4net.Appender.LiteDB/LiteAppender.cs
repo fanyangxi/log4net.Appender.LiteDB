@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
+using System.IO;
+using System.Linq;
 using log4net.Core;
 using log4net.Util;
 using LiteDB;
@@ -63,6 +65,11 @@ namespace log4net.Appender.LiteDB
         /// </remarks>
         private static readonly Type declaringType = typeof(LiteAppender);
 
+        private static readonly object rotatingFileSyncRoot = new object();
+
+        /// <summary> Cached LiteDb file info, to calculate file size </summary>
+        private FileInfo liteDbFileInfo = null;
+
         /// <summary>
         /// Gets or sets Lite collection to write to. Initialised when the appender is activated
         /// </summary>
@@ -85,6 +92,16 @@ namespace log4net.Appender.LiteDB
         /// </para>
         /// </remarks>
         public virtual string File { get; set; }
+
+        /// <summary>
+        /// Set max file size in MB, When more than FileMaxSizeInMB, will move to new <see cref="File"/>.
+        /// </summary>
+        /// <value>Must more than 10, and less than 1000 due to LiteDb known performance issues</value>
+        /// <remarks>
+        /// For more information, see reference to LiteDb issues
+        /// https://github.com/mbdavid/LiteDB/issues/967
+        /// </remarks>
+        public virtual long FileMaxSizeInMB { get; set; }
 
         /// <summary>
         /// Gets or sets the name of the collection in the database. Defaults to "logs"
@@ -140,7 +157,7 @@ namespace log4net.Appender.LiteDB
         }
 
         /// <summary>
-        /// Appends a logging event to Mongo
+        /// Appends a logging event to LiteDb
         /// </summary>
         /// <param name="loggingEvent">The logging event</param>
         protected override void Append(LoggingEvent loggingEvent)
@@ -175,6 +192,28 @@ namespace log4net.Appender.LiteDB
         /// <returns>The Mongo collection</returns>
         protected virtual LiteCollection<BsonDocument> GetCollection()
         {
+            if (!ShouldRotateLiteDbFile())
+            {
+                return databaseConnection.GetCollection(CollectionName ?? "logs");
+            }
+
+            DiposeConnection();
+
+            try
+            {
+                lock (rotatingFileSyncRoot)
+                {
+                    liteDbFileInfo.MoveTo(GetAvailableBackupLiteDbFileName());
+                    liteDbFileInfo = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                this.ErrorHandler.Error("Exception while moving file", ex);
+            }
+
+            InitializeDatabaseConnection();
+
             return databaseConnection.GetCollection(CollectionName ?? "logs");
         }
 
@@ -185,9 +224,54 @@ namespace log4net.Appender.LiteDB
         /// <returns>The Mongo database</returns>
         protected virtual LiteDatabase CreateDatabaseConnection()
         {
-            var fullPath = SystemInfo.ConvertToFullPath(this.File);
-            var db = new LiteDatabase(fullPath);
-            return db;
+            lock (rotatingFileSyncRoot)
+            {
+                var fullPath = SystemInfo.ConvertToFullPath(this.File);
+                this.liteDbFileInfo = new FileInfo(fullPath);
+                var db = new LiteDatabase(fullPath);
+                return db;
+            }
+        }
+
+        /// <summary>
+        /// check whether rotate litedb file or not based on <see cref="FileMaxSizeInMB"/>
+        /// </summary>
+        /// <returns>bool to indicate should rotate or not</returns>
+        private bool ShouldRotateLiteDbFile()
+        {
+            if (FileMaxSizeInMB <= 10 || liteDbFileInfo == null)
+            {
+                return false;
+            }
+
+            lock (rotatingFileSyncRoot)
+            {
+                liteDbFileInfo.Refresh();
+
+                return liteDbFileInfo.Exists && liteDbFileInfo.Length > FileMaxSizeInMB * 1024 * 1024;
+            }
+        }
+
+        /// <summary>
+        /// Get available new litedb file name for backup data
+        /// </summary>
+        /// <returns></returns>
+        private string GetAvailableBackupLiteDbFileName()
+        {
+            var liteDbFileFullPath = Path.GetFullPath(this.liteDbFileInfo.DirectoryName);
+            var liteDbFileTemplate =
+                $"{Path.GetFileNameWithoutExtension(liteDbFileInfo.FullName)}_{{0}}{liteDbFileInfo.Extension}";
+            var existedPostfixDbFileCount = Directory.GetFiles(liteDbFileFullPath, string.Format(liteDbFileTemplate, "???"))
+                .SkipWhile(f => f.Contains("-journal"))
+                .Count() + 1;
+            var newLiteDbFileName = string.Format(liteDbFileTemplate, existedPostfixDbFileCount);
+            while (System.IO.File.Exists(newLiteDbFileName))
+            {
+                existedPostfixDbFileCount++;
+                newLiteDbFileName = string.Format(liteDbFileTemplate, existedPostfixDbFileCount);
+            }
+
+            return $"{liteDbFileFullPath}{Path.AltDirectorySeparatorChar}{newLiteDbFileName}";
         }
 
         /// <summary>
@@ -197,7 +281,10 @@ namespace log4net.Appender.LiteDB
         /// <returns>The BSON document</returns>
         private BsonDocument BuildBsonDocument(LoggingEvent log)
         {
-            var doc = new BsonDocument();
+            var doc = new BsonDocument
+            {
+                { "_id", new BsonValue(Guid.NewGuid()) } // use _id to indicate document
+            };
             foreach (var parameter in parameters)
             {
                 try
