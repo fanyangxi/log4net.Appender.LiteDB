@@ -4,7 +4,7 @@ A log4net appender for LiteDB (http://www.litedb.org/)
 [![NuGet version](https://badge.fury.io/nu/log4net.appender.litedb.svg)](https://badge.fury.io/nu/log4net.appender.litedb)
 
 ## Getting started
-Built with Visual Studio 2013, .Net framework 4.0
+Built with Visual Studio 2017, .Net framework 4.0
 
 ### General explaination:
 You can use this appender to write logs to LiteDB.
@@ -15,6 +15,8 @@ You can use this appender to write logs to LiteDB.
 <log4net>
   <appender name="LiteDb" type="log4net.Appender.LiteDB.LiteAppender, log4net.Appender.LiteDB">
     <file value="Logs\sample-logs.db"/>
+	<!-- set FileMaxSizeInMB to value larger that 10 to enable rotate db file by size automatically -->
+	<fileMaxSizeInMB value="100" />
     <collectionName value="logs"/>
     <parameter>
       <name value="timestamp"/>
