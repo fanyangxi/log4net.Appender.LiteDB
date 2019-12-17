@@ -19,11 +19,11 @@ jobs:
         #nuget-api-key: # optional
         # Source to scope the NuGet API Key to.
         #nuget-api-key-source: # optional
+    - name: Setup MSBuild.exe
+      uses: warrenbuckley/Setup-MSBuild@v1
     - name: Restore packages
       working-directory: src
       run: nuget restore
-    - name: Setup MSBuild.exe
-      uses: warrenbuckley/Setup-MSBuild@v1
     - name: Build with MSBuild.exe
       working-directory: src
       run: msbuild log4net.Appender.LiteDB.sln -t:Rebuild -p:Configuration=Release
