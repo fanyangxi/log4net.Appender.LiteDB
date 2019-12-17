@@ -3,7 +3,7 @@
   <metadata>
     <id>log4net.Appender.LiteDB</id>
     <title>log4net.Appender.LiteDB</title>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
     <authors>FAN Yangxi</authors>
     <owners>fanyangxi</owners>
     <licenseUrl>https://github.com/fanyangxi/log4net.Appender.LiteDB/blob/master/LICENSE</licenseUrl>
